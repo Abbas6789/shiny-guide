@@ -1,0 +1,93 @@
+<script>
+    // Firebase Setup
+    const firebaseConfig = {
+        databaseURL: "https://ab-liter-server-default-rtdb.firebaseio.com/"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Generate and Save Key (With Auto-Expiry Logic)
+    function generateAndSaveKey() {
+        const prefix = "AB-LITER-";
+        const random = Math.random().toString(36).substring(2, 10).toUpperCase();
+        const fullKey = prefix + random;
+        const days = parseInt(document.getElementById('key-time').value);
+
+        // ایکسپائری ٹائم کیلکولیشن (موجودہ وقت + منتخب کردہ دن)
+        const now = new Date();
+        const expiryDate = new Date();
+        expiryDate.setDate(now.getDate() + days);
+        
+        const expiryTimestamp = expiryDate.getTime(); // ملی سیکنڈز میں وقت
+
+        db.ref('keys/' + fullKey).set({
+            key: fullKey,
+            duration: days + " Days",
+            status: "ACTIVE",
+            deviceId: "Not Bound",
+            createdAt: now.toLocaleString(),
+            expiryAt: expiryTimestamp // یہ وہ وقت ہے جب کی خود بخود بلاک ہوگی
+        }).then(() => {
+            document.getElementById('generated-key').value = fullKey;
+            alert("Key Saved! یہ کی " + days + " دن بعد خود ختم ہو جائے گی۔");
+        });
+    }
+
+    // Load Data (کیز کی لسٹ دکھانا)
+    function loadKeys() {
+        db.ref('keys').on('value', (snapshot) => {
+            const tableBody = document.getElementById('key-table-body');
+            const userCount = document.getElementById('user-count');
+            tableBody.innerHTML = "";
+            let count = 0;
+            const currentTime = new Date().getTime();
+
+            snapshot.forEach((child) => {
+                count++;
+                const data = child.val();
+                const device = data.deviceId ? data.deviceId : "Not Bound";
+                
+                // اگر وقت ختم ہو گیا ہو تو ریڈ کلر میں دکھائے
+                const isExpired = data.expiryAt && currentTime > data.expiryAt;
+                const statusStyle = isExpired ? "color: #ff3e3e; font-weight: bold;" : "color: #00ff88;";
+                const statusText = isExpired ? "EXPIRED" : "ACTIVE";
+
+                const row = `
+                    <tr>
+                        <td><b style="color:var(--neon-blue)">${data.key}</b><br><small style="${statusStyle}">${statusText}</small></td>
+                        <td style="color:#666; font-size:9px;">${device}</td>
+                        <td>
+                            <button class="reset-btn" onclick="resetDevice('${data.key}')">RESET</button>
+                            <button class="delete-btn" onclick="deleteKey('${data.key}')"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>`;
+                tableBody.innerHTML = row + tableBody.innerHTML;
+            });
+            userCount.innerText = count;
+        });
+    }
+
+    // باقی پرانے فنکشنز (Reset, Delete, Settings) وہی رہیں گے
+    function resetDevice(keyId) {
+        if(confirm("کیا آپ ڈیوائس آئی ڈی ری سیٹ کرنا چاہتے ہیں؟")) {
+            db.ref('keys/' + keyId).update({ deviceId: "Not Bound" });
+        }
+    }
+
+    function deleteKey(id) {
+        if(confirm("Delete this key?")) db.ref('keys/' + id).remove();
+    }
+
+    function saveSettings() {
+        const acc = document.getElementById('accuracy-val').innerText;
+        db.ref('settings/accuracy').set(acc).then(() => alert("Settings Saved!"));
+    }
+
+    function updateAcc(val) {
+        document.getElementById('range-val').innerText = val + "%";
+        document.getElementById('accuracy-val').innerText = val + "%";
+    }
+
+    window.onload = loadKeys;
+  </script>
+  
